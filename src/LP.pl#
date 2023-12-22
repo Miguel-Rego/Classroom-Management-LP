@@ -1,0 +1,332 @@
+% 104119 Miguel de Oliveira Matoso Rego
+:- set_prolog_flag(answer_write_options,[max_depth(0)]).
+:- ["dados.pl"], ["keywords.pl"].
+
+
+is_set([]).
+is_set(Lst) :-
+    is_list(Lst),
+    setof(X, member(X, Lst), Set),
+    length(Lst, N),
+    length(Set, N).
+
+
+is_sorted([]).
+is_sorted([_]).
+is_sorted([X,Y|T]) :-
+   X=<Y,
+   is_sorted([Y|T]).
+
+evento_checker(Numero):- evento(Numero,_,_,_,_).
+
+horario_checker(Numero):- horario(Numero,_,_,_,_,_).
+
+diadasemana_numero_checker_segunda_feira(DiaDaSemana, Numero) :-
+    horario(Numero, segunda-feira, _,_,_,_),
+    horario(Numero, DiaDaSemana,_,_,_,_).
+
+
+
+
+semsala_evento_checker(Numero2) :- evento(Numero2,_, _, _,semSala).
+
+eventosSemSalas(EventosSemSala) :-
+    findall(ID, evento(ID,_,_,_,semSala),EventosSemSala),
+    setof(X, member(X, EventosSemSala), SemDup),
+    sort(SemDup, EventosSemSala).
+
+
+eventosSemSalasDiaSemana(DiaDaSemana, EventosSemSala) :-
+    eventosSemSalas(Y),
+    findall(X,(member(X, Y), horario(X, DiaDaSemana,_,_,_,_)), EventosSemSala).
+
+
+lista_periodo_checker([]).
+lista_periodo_checker(Lista) :- is_list(Lista),
+    subset(Lista,[p1, p2, p3, p4]).
+
+numero_horario_p1_p2(ListaPeriodo,Numero) :-
+    member(p1,ListaPeriodo);
+    member(p2,ListaPeriodo);
+    horario(Numero,_,_,_,_,X),
+    member(X, [p1_p2]).
+
+numero_horario_p3_p4(ListaPeriodo,Numero) :-
+    member(p3,ListaPeriodo);
+    member(p4,ListaPeriodo);
+    horario(Numero,_,_,_,_,X),
+    member(X,[p3_p4]).
+
+ numero_horario(ListaPeriodo,Numero) :-
+    horario(Numero,_,_,_,_,X),
+    member(X,ListaPeriodo).
+
+
+numero_horario_listaperiodo_checker(ListaPeriodo,Numero):- numero_horario(ListaPeriodo, Numero).
+
+eventosSemSalasPeriodo(ListaPeriodos, EventosSemSala):-
+    lista_periodo_checker(ListaPeriodos),
+    eventosSemSalas(Eventos),
+    findall(E,(member(E, Eventos),horario(E,_,_,_,_,P),(P == p1_2 -> member(P1,[p1,p2]), member(P1, ListaPeriodos); P == p3_4 -> member(P2,[p3,p4]), member(P2, ListaPeriodos); member(P, ListaPeriodos))), EventosSemSalaAux),
+    remove_duplicates(EventosSemSalaAux, EventosSemSala).
+
+
+
+selecionar_min(Min, [], Min, []).
+selecionar_min(H, [H1|T], Min, [H1|Rest]) :-
+    H1 < H,
+    selecionar_min(H1, T, Min, Rest).
+selecionar_min(H, [H1|T], Min, [H|Rest]) :-
+    H1 >= H,
+    selecionar_min(H, T, Min, Rest).
+
+selecionar(X, [X|Xs], Xs).
+selecionar(X, [Y|Ys], [Y|Zs]) :- selecionar(X, Ys, Zs).
+
+
+sort_recursive(List, SortedList) :-
+    selecionar(X, List, Rest),
+    sort_recursive(Rest, SmallerSortedList),
+    insert(X, SmallerSortedList, SortedList).
+sort_recursive([], []).
+
+insert(X, [], [X]).
+insert(X, [Y|Ys], [X,Y|Ys]) :- X @< Y.
+insert(X, [Y|Ys], [Y|Zs]) :- X @>= Y, insert(X, Ys, Zs).
+
+remove_duplicates([], []).
+remove_duplicates([X|Xs], Result) :-
+    member(X, Xs),
+    remove_duplicates(Xs, Result).
+remove_duplicates([X|Xs], [X|Result]) :-
+    \+ member(X, Xs),
+    remove_duplicates(Xs, Result).
+
+findall_interative(_,_,_,[],[]).
+findall_interative(Goal1, Goal2, Accumulator, [H|T], Result):-
+    (  call(Goal1, H), call(Goal2, H)
+    -> call(Accumulator, H, AccumulatorResult),
+       findall_interative(Goal1, Goal2, Accumulator, T, TailResult),
+       Result = [AccumulatorResult|TailResult]
+    ;  findall_interative(Goal1, Goal2, Accumulator, T, Result)
+    ).
+
+organizaEventos(ListaEventos, Periodo, EventosNoPeriodo) :-
+    sort(0, @>, ListaEventos, ListaEventosOrdenada), % sort the list in ascending order
+    remove_duplicates(ListaEventosOrdenada, ListaEventosSemDuplicados), % remove duplicates from the sorted list
+    organizaEventos(ListaEventosSemDuplicados, Periodo, [], EventosNoPeriodo). % start the recursive predicate with an empty list as accumulator
+
+organizaEventos([], _, Acc, Acc). % base case: when the input list is empty, return the accumulator
+organizaEventos([H|T], Periodo, Acc, EventosNoPeriodo) :-
+( horario(H, _, _, _, _, Periodo)
+; Periodo = p1, horario(H, _, _, _, _, p1_2)
+; Periodo = p2, horario(H, _, _, _, _, p1_2)
+; Periodo = p3, horario(H, _, _, _, _, p3_4)
+; Periodo = p4, horario(H, _, _, _, _, p3_4)
+),
+organizaEventos(T, Periodo, [H|Acc], EventosNoPeriodo).
+organizaEventos([_|T], Periodo, Acc, EventosNoPeriodo):-
+organizaEventos(T, Periodo, Acc, EventosNoPeriodo).
+
+eventosMenoresQue(Duracao, ListaEventosMenoresQue):-
+    findall(X, (horario(X, _, _, _, Z, _), Z =< Duracao), ListaSemSort),
+    sort(ListaSemSort, ListaEventosMenoresQue).
+
+eventosMenoresQueBool(ID, Duracao) :- horario(ID,_,_,_,Y,_),
+    Y =< Duracao.
+
+procuraDisciplinas(Curso,ListaDisciplinas):-
+    findall(ID,turno(ID,Curso,_,_), Y),
+    remove_duplicates(Y, ListadeIdsDoTurno),
+    findall(NomeDisciplina,(member(ID, ListadeIdsDoTurno), evento(ID,NomeDisciplina,_,_,_)), Res1),
+    sort(Res1, ListaDisciplinas).
+
+extraiIDdeDisciplinas([], []).
+extraiIDdeDisciplinas([Disciplina|Tail], IDs) :-
+    evento(ID, Disciplina, _, _, _),
+    extraiIDdeDisciplinas(Tail, IDsTail),
+    append([ID], IDsTail, IDs).
+extraiIDdeDisciplinas([_|Tail], IDs) :-
+    extraiIDdeDisciplinas(Tail, IDs).
+
+extraiDisciplinasdeIDs([], []). % base case: when the input list is empty, return the empty list
+extraiDisciplinasdeIDs([H|T], [Disciplina|Resto]) :-
+  evento(H, Disciplina, _, _, _), % check if there is an event with the given ID
+  extraiDisciplinasdeIDs(T, Resto). % continue the recursion with the rest of the input list
+
+verificaCurso(_, []).
+verificaCurso(Curso, [Disciplina|Tail]) :-
+    evento(ID, Disciplina, _, _, _), % find the ID of the discipline
+    turno(ID, Curso, _, _), % check if the discipline is part of the course
+    verificaCurso(Curso, Tail). % continue the recursion with the rest of the list
+
+remove_elements(_, [], []). % base case: if B is empty, return an empty list
+remove_elements(A, [H|T], B) :-
+  member(H, A), % H belongs to A, so remove it from B
+  remove_elements(A, T, B).
+remove_elements(A, [H|T], [H|B]) :-
+  \+ member(H, A), % H does not belong to A, so keep it in B
+  remove_elements(A, T, B).
+
+
+organizaDisciplinas(ListaDisciplinas, Curso, Semestres) :-
+    verificaCurso(Curso, ListaDisciplinas),
+    organizaDisciplinas(ListaDisciplinas, p1, p2, EventosNoP1_2_Aux, []),
+    organizaDisciplinas(ListaDisciplinas, p3, p4, EventosNoP3_4_Aux_Aux, []),
+    remove_elements(EventosNoP1_2_Aux, EventosNoP3_4_Aux_Aux, EventosNoP3_4_Aux),
+    sort(EventosNoP1_2_Aux, EventosNoP1_2),
+    sort(EventosNoP3_4_Aux, EventosNoP3_4),
+
+    Semestres = [EventosNoP1_2,EventosNoP3_4].
+
+organizaDisciplinas([], _, _, Acc, Acc).
+organizaDisciplinas([Disciplina|Tail], Periodo1, Periodo2, Res, Acc) :-
+    evento(ID, Disciplina, _, _, _),
+    horario(ID, _, _, _, _, Periodo),
+    ( Periodo = Periodo1
+    ; Periodo = Periodo2
+    ),
+    organizaDisciplinas(Tail, Periodo1, Periodo2, Res, [Disciplina|Acc]).
+organizaDisciplinas([_|Tail], Periodo1, Periodo2, Res, Acc) :-
+    organizaDisciplinas(Tail, Periodo1, Periodo2, Res, Acc).
+
+
+horasCurso(Periodo, Curso, Ano, TotalHoras):-
+    findall(X,turno(X,Curso, Ano,_), IDsdeTurnosdoCurso),
+    list_to_set(IDsdeTurnosdoCurso, Res2),
+    findall(Z,(member(X, Res2), (horario(X,_,_,_,Z,Periodo);
+                         Periodo = p1, horario(X,_,_,_,Z,p1_2);
+                         Periodo = p2, horario(X,_,_,_,Z,p1_2);
+                         Periodo = p3, horario(X,_,_,_,Z,p3_4);
+                         Periodo = p4, horario(X,_,_,_,Z,p3_4))),
+            Res3),
+
+    sum_list(Res3, TotalHoras).
+
+horasCurso2(Curso, Periodo, Ano, TotalHoras):-
+    findall(X,turno(X,Curso, Ano,_), IDsdeTurnosdoCurso),
+    list_to_set(IDsdeTurnosdoCurso, Res2),
+    findall(Z,(member(X, Res2), (horario(X,_,_,_,Z,Periodo);
+                         Periodo = p1, horario(X,_,_,_,Z,p1_2);
+                         Periodo = p2, horario(X,_,_,_,Z,p1_2);
+                         Periodo = p3, horario(X,_,_,_,Z,p3_4);
+                         Periodo = p4, horario(X,_,_,_,Z,p3_4))),
+            Res3),
+
+    sum_list(Res3, TotalHoras).
+
+
+evolucaoHorasCurso(Curso, SortedEvolucao):-
+    findall((Ano, Periodo, TotalHoras), (member(Periodo, [p1, p2, p3, p4]), member(Ano, [1, 2, 3]), horasCurso(Periodo, Curso, Ano, TotalHoras)), Evolucao),
+    msort(Evolucao, SortedEvolucao).
+
+% Define the predicate that receives two lists and a variable
+overlap(List1, List2, Z) :-
+  % Extract the two numbers from List1
+  [X1, X2] = List1, X1 < X2,
+  % Extract the two numbers from List2
+  [Y1, Y2] = List2, Y1 < Y2,
+  % Calculate the overlap between X1 and X2
+  Z is max(0, min(X2, Y2) - max(X1, Y1)),
+  Z > 0.
+
+
+ocupaSlot(HoraInicioDada, HoraFimDada, HoraInicioEvento, HoraFimEvento, Horas) :-
+    List1 = [HoraInicioDada, HoraFimDada],
+    List2 = [HoraInicioEvento, HoraFimEvento],
+    overlap(List1, List2, Horas).
+
+
+
+numHorasOcupadas(Periodo1, TipoSala, DiaSemana, HoraInicio1, HoraFim1, SomaHoras) :-
+    salas(TipoSala, X),
+    findall(Hora-Hora2,(member(Y, X),evento(L,_,_,_,Y), horario(L,DiaSemana, Hora,Hora2,_,Periodo1);
+                         Periodo1 = p1,member(Y, X),evento(L,_,_,_,Y), horario(L,DiaSemana, Hora,Hora2,_,p1_2);
+                         Periodo1 = p2,member(Y, X),evento(L,_,_,_,Y), horario(L,DiaSemana, Hora,Hora2,_,p1_2);
+                         Periodo1 = p3,member(Y, X),evento(L,_,_,_,Y), horario(L,DiaSemana, Hora,Hora2,_,p3_4);
+                         Periodo1 = p4,member(Y, X),evento(L,_,_,_,Y), horario(L,DiaSemana, Hora,Hora2,_,p3_4)),
+            Res3),
+    findall(Hora, member(Hora-_, Res3), Res4),
+    findall(Hora2, member(_-Hora2, Res3), Res5),
+    findall(Y, (nth1(I, Res4, Hora), nth1(I, Res5, Hora2), ocupaSlot(HoraInicio1, HoraFim1, Hora, Hora2, Y)), Contador_list),
+    sum_list(Contador_list, SomaHoras).
+
+
+
+
+ocupacaoMax(TipoSala, HoraInicio, HoraFim, Max) :-
+    salas(TipoSala, X),
+    Z is HoraFim - HoraInicio,
+    length(X, Y),
+    Max is Y * Z.
+
+percentagem(SomaHoras, Max, Percentagem) :-
+   Percentagem is (SomaHoras / Max) * 100.
+
+
+ocupacaoCritica(HoraInicio2, HoraFim2, Threshold, Resultados) :-
+    findall(DiaDaSemana-Sala1-OcupacaoPercentual,
+        (evento(Numero, _, _, _, Sala),
+         horario(Numero, DiaDaSemana, HoraInicio1, HoraFim1, _,Periodo1),
+         salas(Sala1, Salas),
+         member(Sala, Salas),
+          HoraInicio2 =< HoraFim1, HoraFim2 >= HoraInicio1, % check if event overlaps with specified time period
+         salas(Sala1, Salas),
+         member(Sala, Salas),
+         numHorasOcupadas(Periodo1, Sala1, DiaDaSemana, HoraInicio2, HoraFim2, SomaHoras3),
+         ocupacaoMax(Sala1, HoraInicio2, HoraFim2, Max2),
+         percentagem(SomaHoras3, Max2, OcupacaoPercentualRes),
+         ceiling(OcupacaoPercentualRes, OcupacaoPercentual)
+        ),
+        Res2),
+
+    findall(casosCriticos(X,Y,Z), (member(X-Y-Z, Res2), Z > Threshold), ResultadosAux),
+    setof(M, member(M, ResultadosAux), Resultados).
+are_consecutive(X, Y, L) :-
+    append(Prefix, [X, Y | _], L),
+    length(Prefix, Index),
+    nth0(Index, L, X).
+
+cab1(X4, ListaMesa) :-
+    nth0(3, ListaMesa, X4).
+
+cab2(X5, ListaMesa) :-
+    nth0(4, ListaMesa, X5).
+
+honra(NomePessoa1, NomePessoa2, ListaMesa) :-
+    cab1(NomePessoa1, ListaMesa), nth0(5, ListaMesa, NomePessoa2);
+    cab2(NomePessoa1, ListaMesa), nth0(2, ListaMesa, NomePessoa2).
+
+lado(NomePessoa1, NomePessoa2, ListaMesa) :-
+   length(Prefix, 3),
+   append(Prefix, [_, _ | Suffix], ListaMesa),
+   append(Prefix, Suffix, ListaMesaSemCabeceira),
+   are_consecutive(NomePessoa1, NomePessoa2, ListaMesaSemCabeceira).
+
+naoLado(NomePessoa1, NomePessoa2, ListaMesa) :-
+   cab1(NomePessoa1, ListaMesa), memb; cab2(NomePessoa1, ListaMesa);
+   cab1(NomePessoa2, ListaMesa)
+   length(Prefix, 3),
+   append(Prefix, [_, _ | Suffix], ListaMesa),
+   append(Prefix, Suffix, ListaMesaSemCabeceira),
+   \+ are_consecutive(NomePessoa1, NomePessoa2, ListaMesaSemCabeceira).
+    
+mesa(X1,X2,X3,X4,X5,X6,X7,X8)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
